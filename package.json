@@ -1,0 +1,19 @@
+{
+  "name": "torgbox-test",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "mocha": "^11.5.0",
+    "should": "^13.2.3"
+  },
+  "dependencies": {
+    "luxon": "^3.6.1"
+  }
+}
