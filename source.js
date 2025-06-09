@@ -29,23 +29,37 @@ const monthMap = {
 };
 
 /**
+ * Форматер даты yyyy-mm-dd
+ *
+ * @param year год
+ * @param month месяц
+ * @param day день
+ *
+ * @returns отформатированная строка yyyy-mm-dd
+ */
+function toDateFormat(year, month, day) {
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
 
-* Парсер даты
-* 
-* @param dateStr строка со временем
-*
-* @returns отформатированная строка yyyy-mm-dd
-* @returns null
-*/
-function parseDate(dateStr) {
-  if (!dateStr) return null;
-  for (const reg of dateRegExpParsers) {
-    const parsedDate = reg(dateStr);
-    if (parsedDate) {
-      return parsedDate;
-    }
-  }
-  return null;
+/**
+ * Форматер времени THH-MM-SS.XXX
+ *
+ * @param hours часы
+ * @param minutes минуты
+ * @param ms миллисекунды
+ *
+ * @returns отформатированная строка THH:MM:SS.XXX
+ */
+function toTimeFormat(
+  hours = "00",
+  minutes = "00",
+  seconds = "00",
+  ms = "000"
+) {
+  return `T${hours.padStart(2, "0")}:${minutes.padStart(
+    2,
+    "0"
+  )}:${seconds.padStart(2, "0")}.${ms.padStart(3, "0")}`;
 }
 
 /**
@@ -55,31 +69,42 @@ function parseDate(dateStr) {
  * @returns undefined
  */
 const dateRegExpParsers = [
-  (str) => {
-    const match = str.match(/(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})/); // формат dd-mm-yyyy
-    if (match) {
-      return toDateFormat(match[3], match[2], match[1]);
-    }
+  {
+    regex: /(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})/, // dd-mm-yyyy
+    handler: (m) => toDateFormat(m[3], m[2], m[1]),
   },
-  (str) => {
-    const match = str.match(/(\d{4})[\.\-\/](\d{2})[\.\-\/](\d{2})/); // формат yyyy-mm-dd
-    if (match) {
-      return toDateFormat(match[1], match[2], match[3]);
-    }
+  {
+    regex: /(\d{4})[\/\-\.](\d{2})[\/\-\.](\d{2})/, // yyyy-mm-dd
+    handler: (m) => toDateFormat(m[1], m[2], m[3]),
   },
-  (str) => {
-    const match = str.match(/["«]?(\d{1,2})["»]? ([А-я]+\.?) (\d{4})/); // формат с буквенными месяцами yyyy-mm-dd (англ. названий нет)
-    if (match) {
-      return toDateFormat(match[3], monthMap[match[2]], match[1]);
-    }
-  },
-  (str) => {
-    const match = str.match(/(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})/);
-    if (match) {
-      return toDateFormat(match[3], match[2], match[1]);
-    }
+  {
+    regex: /["«]?(\d{1,2})["»]?\s+([А-яёЁ.]+)\s+(\d{4})/, // dd month yyyy
+    handler: (m) => {
+      const month = monthMap[m[2].toLowerCase()];
+      return month ? toDateFormat(m[3], month, m[1]) : undefined;
+    },
   },
 ];
+
+/**
+ * Парсер даты
+ *
+ * @param dateStr строка со временем
+ *
+ * @returns отформатированная строка yyyy-mm-dd
+ * @returns null
+ */
+function parseDate(dateStr) {
+  if (!dateStr) return null;
+  for (const { regex, handler } of dateRegExpParsers) {
+    const match = dateStr.match(regex);
+    if (match) {
+      const result = handler(match);
+      if (result) return result;
+    }
+  }
+  return null;
+}
 
 /**
  * Парсер в ISO8601
@@ -96,40 +121,6 @@ function parseToISO(dateStr) {
   const stamp = parseTime(dateStr);
   const timezone = parseTimeZone(dateStr);
   return parsedDate + stamp + timezone;
-}
-
-/**
- * Форматер даты yyyy-mm-dd
- *
- * @param year год
- * @param month месяц
- * @param day день
- *
- * @returns отформатированная строка yyyy-mm-dd
- */
-function toDateFormat(year, month, day) {
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
-
-/**
- * Форматер времени THH-MM-SS.XXX
- *
- * @param hours год
- * @param minutes месяц
- * @param ms день
- *
- * @returns отформатированная строка THH:MM:SS.XXX
- */
-function toTimeFormat(
-  hours = "00",
-  minutes = "00",
-  seconds = "00",
-  ms = "000"
-) {
-  return `T${hours.padStart(2, "0")}:${minutes.padStart(
-    2,
-    "0"
-  )}:${seconds.padStart(2, "0")}.${ms.padStart(3, "0")}`;
 }
 
 /**
@@ -152,21 +143,22 @@ function parseTimeZone(dateStr) {
  * @param dateStr строка со временем
  *
  * @returns отформатированная строка THH:MM:SS.XXX
- * @returns null
  */
 function parseTime(dateStr) {
   if (!dateStr) return null;
-  const match = dateStr.match(/(\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
-  if (!match) {
-    const time = dateStr.match(
-      /(?:(?:T|\s|\+|;)\s*)?(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?/
-    );
-    if (!time || time[0].startsWith("+")) return toTimeFormat();
+  const patterns = [
+    /(\d{2}):(\d{2}):(\d{2})\.(\d{3})/, //HH:MM:SS.XXX
+    /(?:(?:T|\s|\+|;)\s*)?(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?/
+  ];
 
-    return toTimeFormat(time[1], time[2], time[3], time[4]);
+  for (const regex of patterns) {
+    const match = dateStr.match(regex);
+    if (match && !match[0].startsWith("+")) {
+      return toTimeFormat(match[1], match[2], match[3], match[4]);
+    }
   }
 
-  return toTimeFormat(match[1], match[2], match[3], match[4]);
+  return toTimeFormat();
 }
 
 module.exports = function ({ src, options }) {
